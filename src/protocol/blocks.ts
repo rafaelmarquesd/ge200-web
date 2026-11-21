@@ -64,6 +64,8 @@ export interface BlockState {
   type: number;
   typeName: string;
   values: { name: string; value: number }[];
+  /** Bytes do frame ao vivo (após o CMD), para reenviar preservando campos desconhecidos. */
+  raw?: Uint8Array;
 }
 
 export function typeName(def: BlockDef, type: number): string {
@@ -83,7 +85,7 @@ export function decodeLiveBlock(cmd: number, params: Uint8Array): BlockState | n
     const off = 4 + 2 * i;
     if (off + 1 < params.length) values.push({ name, value: u16(off) });
   });
-  return { key: def.key, label: def.label, enabled, type, typeName: typeName(def, type), values };
+  return { key: def.key, label: def.label, enabled, type, typeName: typeName(def, type), values, raw: params.slice() };
 }
 
 export interface SavedPreset {

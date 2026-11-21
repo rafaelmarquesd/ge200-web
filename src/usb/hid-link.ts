@@ -36,7 +36,7 @@ export class Ge200Link {
   /** Envia um frame já codificado (AA 55 ...), quebrando em relatórios de 64 bytes. */
   async send(frame: Uint8Array, label: string): Promise<void> {
     const packets = packetize(frame);
-    this.log.add('tx', `${label}: ${hex(frame)}`);
+    this.log.add('tx', `${label}: ${hex(frame, 72)}`);
     for (const p of packets) {
       if (this.verbose) this.log.add('tx', `  relatório 64B: ${hex(p.subarray(0, p[0] + 1))}`);
       await this.device.sendReport(0, p);
@@ -49,8 +49,10 @@ export class Ge200Link {
    */
   async sendWrite(cmd: WriteCommand, dryRun: boolean): Promise<boolean> {
     if (dryRun) {
-      this.log.add('tx', `DRY-RUN (NÃO enviado) ${cmd.label} [${cmd.risk}]: ${hex(cmd.frame)}\n` +
-        packetize(cmd.frame).map((p) => `  relatório 64B: ${hex(p.subarray(0, p[0] + 1))}`).join('\n'));
+      const ps = packetize(cmd.frame);
+      this.log.add('tx', `DRY-RUN (NÃO enviado) ${cmd.label} [${cmd.risk}]: ${hex(cmd.frame, 72)}\n` +
+        ps.slice(0, 2).map((p) => `  relatório 64B: ${hex(p.subarray(0, p[0] + 1))}`).join('\n') +
+        (ps.length > 2 ? `\n  … ${ps.length} relatórios no total` : ''));
       return false;
     }
     await this.send(cmd.frame, `ESCRITA ${cmd.label} [${cmd.risk}]`);

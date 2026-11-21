@@ -156,3 +156,26 @@ button.huge { min-height: 88px; font-size: 2rem; background: #2a2413; border-col
 .stage-opts { margin: 10px 0 0; align-items: center; }
 .lockhint { margin: 0; }
 .pitem .pv { float: right; color: var(--muted); font-size: .78rem; margin-left: 6px; }
+
+/* Fase 4: edição */
+.hint.small { font-size: .78rem; margin: 4px 0; }
+.filebtn { display: inline-flex; align-items: center; min-height: 44px; padding: 10px 14px; border: 1px solid #333c48; border-radius: 12px; background: #232a33; font-weight: 600; cursor: pointer; }
+.filebtn input { display: none; }
+.diff { background: #0a0c0f; border: 1px solid var(--line); border-radius: 10px; padding: 10px; font-size: .88rem; margin: 6px 0; }
+.diff ul { margin: 6px 0 0; padding-left: 18px; }
+.volrow { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.volrow input[type=range] { flex: 1; min-width: 80px; }
+.vbtn { min-width: 48px; padding: 8px; }
+.volval { font: 800 1.6rem/1 ui-monospace, Menlo, Consolas, monospace; color: var(--accent); min-width: 2.5em; text-align: right; }
+.eblocks { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.eblock { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: #12161b; }
+.eblock.off { border-style: dashed; }
+.toggle { min-width: 72px; min-height: 40px; padding: 6px 10px; }
+.toggle.on { background: var(--ok); border-color: var(--ok); color: #052e16; }
+select { font: inherit; color: var(--text); background: #0f1318; border: 1px solid #333c48; border-radius: 10px; min-height: 44px; padding: 6px 8px; max-width: 100%; }
+.tsel { width: 100%; margin: 8px 0; }
+.frow { display: grid; grid-template-columns: 78px 1fr 40px; align-items: center; gap: 8px; min-height: 44px; font-size: .9rem; }
+.frow.ro { grid-template-columns: 1fr auto; color: var(--muted); min-height: 28px; }
+.frow select { grid-column: 2 / 4; }
+.frow input[type=range] { width: 100%; height: 32px; accent-color: var(--accent); }
+.fval { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }

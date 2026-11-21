@@ -187,7 +187,7 @@ Conferido no aparelho (dump da Fase 2): os 9 blocos salvos do preset ativo batem
 | Offset | Tamanho | Campo |
 |---|---|---|
 | 0 | 10 | ordem dos efeitos (ex.: `01..09 00`, ou `05 01 02 03 06 07 08 09 04 00` com EQ na frente) |
-| 10 | 1 | 🟡 **Preset Volume (0..100), muito provável.** O MooerManager chamava 10–11 de "tamanho u16 BE". No dump: 149 presets com 100, toda a série "CF DC30" com 50, outros com 75, 80, 70, 98… Falta só confirmar com o display da pedaleira. |
+| 10 | 1 | ✅ **Preset Volume (0..100) — confirmado pelo usuário comparando com o display da pedaleira.** O MooerManager chamava 10–11 de "tamanho u16 BE". No dump: 149 presets com 100, toda a série "CF DC30" com 50, outros com 75, 80, 70, 98… Falta só confirmar com o display da pedaleira. |
 | 11 | 1 | ❓ 0 ou 1 (31 presets com 1), significado desconhecido |
 | 12 | 16 | nome (ASCII, completado com zeros) |
 | 28 | 8 | FX/COMP: type, enabled, attack, thresh, ratio, level, -, - |
@@ -208,10 +208,12 @@ nos blocos em tempo real (§4) são **u16 BE** e a ordem é `enabled, type`.
 
 ---
 
-## 7. Preset Volume 🟡
+## 7. Preset Volume ✅ (leitura) / 🟡 (escrita)
 
-**Atualização com o dump real:** o candidato forte é o **byte 10 do preset** (0..100), veja §6. A mensagem `A2` não
-apareceu. Próximo passo: confirmar comparando com o valor mostrado no menu de volume da pedaleira. Depois, descobrir
+**Confirmado:** o Preset Volume é o **byte 10 do preset** (0..100), conferido no display da pedaleira. A mensagem `A2` não
+aparece. Escrita (Fase 4, experimental): o app manda `83` + os 512 bytes do preset ativo (vindos do `86` ou do `A5`)
+com só o byte 10 alterado, o que carrega no buffer de edição sem salvar. O usuário salva no botão da pedaleira,
+e o app relê e compara com o backup. **O `A8` continua sem ser enviado.** Depois, descobrir
 como escrever: (a) mandar o preset inteiro com `83` + salvar com `A8`, ou (b) algum comando direto. Nada disso será
 enviado sem backup e confirmação.
 
@@ -226,9 +228,15 @@ Hipóteses (a confirmar na Fase 2, só com leitura):
 
 ---
 
-## 8. Regras deste projeto para comandos
+## 8. Troca de preset (Fase 3) ✅
+`A6 idx` enviado pelo app troca o preset (testado no aparelho). A pedaleira **não responde** com eco `A6`
+quando a troca vem do host; só manda `A6` quando a troca é feita no pé.
+
+## 9. Regras deste projeto para comandos
 
 - Só leitura sem confirmação: `84`, `E0`.
-- Escrita volátil, sempre com confirmação na interface: `A6`, `82`, `90..99`.
-- Escrita permanente, só com backup feito antes + confirmação: `A8` (e Preset Volume quando for descoberto).
-- **Nunca implementados**: `E1`, `E2`, `A1`, `A3`, `83`, control transfers de áudio, qualquer coisa de firmware, e o "flush" até entendermos o que faz.
+- Escrita volátil, com confirmação na 1ª vez de cada tipo: `A6` (troca de preset), `82` + `90..97` (edição de blocos, igual ao MooerManager).
+- `98`/`99` (DELAY/REVERB): **não enviados**, o MooerManager nunca os envia. Mostrados só para leitura.
+- `83` (preset inteiro no buffer): só para o Preset Volume, exige backup da sessão e confirmação a cada envio.
+- `A8` (salvar): **não enviado** (o 2º byte fixo `A5` pode ser o slot 166). Salvar = botão da própria pedaleira.
+- **Nunca implementados**: `E1`, `E2`, `A1`, `A3`, control transfers de áudio, qualquer coisa de firmware, e o "flush".

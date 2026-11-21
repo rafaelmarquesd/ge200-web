@@ -14,7 +14,7 @@ import { downloadText, type Log } from './log';
 
 const NUM_PRESETS = 200;
 
-interface State {
+export interface State {
   identity: { version: string; name: string } | null;
   fw: { version: string; model: string } | null;
   activeIdx: number | null;
@@ -24,16 +24,28 @@ interface State {
   live: Map<string, BlockState>;
   other: Map<number, string>;
   selected: number | null;
+  /** Menu do display (frame 0x82). */
+  menu: number | null;
+  /** Blocos editados pelo app desde a última leitura (o 0x86 fica desatualizado). */
+  editedSinceRead: boolean;
+  /** Incrementa a cada leitura completa. */
+  readGen: number;
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const num = (i: number) => String(i + 1).padStart(3, '0');
 
 export class Reader {
-  private link: Ge200Link | null = null;
+  private _link: Ge200Link | null = null;
+  private changeListeners = new Set<() => void>();
   private confirmed = false;
   private busy = false;
   private st: State = Reader.empty();
+  get state(): State { return this.st; }
+  get link(): Ge200Link | null { return this._link; }
+  get isDryRun(): boolean { return this.dryRun; }
+  get isBusy(): boolean { return this.busy || this.writing; }
+  onChange(fn: () => void): void { this.changeListeners.add(fn); }
   private off: (() => void) | null = null;
   /** Escrita liberada pelo usuário nesta sessão (depois da confirmação). */
   private armed = false;
@@ -48,12 +60,13 @@ export class Reader {
     return {
       identity: null, fw: null, activeIdx: null, volume: null, editBuffer: null,
       presets: new Array(NUM_PRESETS).fill(null), live: new Map(), other: new Map(), selected: null,
+      menu: null, editedSinceRead: false, readGen: 0,
     };
   }
 
   attach(link: Ge200Link): void {
     this.detach();
-    this.link = link;
+    this._link = link;
     this.st = Reader.empty();
     this.off = link.onFrame((f) => this.onFrame(f));
     this.render();
@@ -62,7 +75,7 @@ export class Reader {
   detach(): void {
     this.off?.();
     this.off = null;
-    this.link = null;
+    this._link = null;
     this.busy = false;
     this.render();
   }
@@ -85,6 +98,7 @@ export class Reader {
           if (st.activeIdx !== null && st.activeIdx !== p[0]) {
             st.live.clear();
             st.editBuffer = null;
+            st.editedSinceRead = false;
           }
           st.activeIdx = p[0];
         }
@@ -101,6 +115,9 @@ export class Reader {
       case 0xa2:
         if (p.length >= 1) st.volume = p[0];
         break;
+      case 0x82:
+        if (p.length >= 1) st.menu = p[0];
+        break;
       case 0xa5:
         if (p.length >= 1 + PRESET_SIZE && p[0] < NUM_PRESETS) {
           try {
@@ -115,7 +132,7 @@ export class Reader {
       default: {
         const b = decodeLiveBlock(f.cmd, p);
         if (b) st.live.set(b.key, b);
-        else st.other.set(f.cmd, hex(p, 48));
+        else st.other.set(f.cmd, hex(p));
       }
     }
     this.scheduleRender();
@@ -151,7 +168,7 @@ export class Reader {
   }
 
   async identify(): Promise<boolean> {
-    const link = this.link;
+    const link = this._link;
     if (!link || this.busy) return false;
     if (!this.ask([{ label: 'Identificar (84 00 00)', bytes: identifyRequest() }])) return false;
     this.busy = true;
@@ -179,7 +196,7 @@ export class Reader {
   }
 
   async readAll(): Promise<void> {
-    const link = this.link;
+    const link = this._link;
     if (!link || this.busy) return;
     if (!this.ask([
       { label: 'Identificar (84 00 00)', bytes: identifyRequest() },
@@ -192,6 +209,9 @@ export class Reader {
     this.busy = true;
     this.render();
     const t0 = performance.now();
+    // nova leitura: zera o estado volátil para não misturar com dados antigos
+    const keep = { identity: this.st.identity, fw: this.st.fw, readGen: this.st.readGen };
+    this.st = { ...Reader.empty(), ...keep };
     try {
       const first = link.waitFor((f) => f.cmd === 0xa5, 4000);
       await link.send(patchListRequest(), 'Ler presets (E0)');
@@ -220,6 +240,7 @@ export class Reader {
         const missing = this.st.presets.map((p, i) => (p ? -1 : i + 1)).filter((i) => i > 0);
         this.log.warn(`Recebi ${c} de 200 presets em ${secs} s. Faltando: ${missing.slice(0, 40).join(', ')}${missing.length > 40 ? '…' : ''}`);
       }
+      this.st.readGen++;
       this.log.info(this.summary());
     } catch (e) {
       this.log.error('Falha ao enviar: ' + errText(e));
@@ -231,6 +252,7 @@ export class Reader {
 
   // ---------- escrita (Fase 3) ----------
 
+  /** Confirmação para troca de preset. */
   private confirmWrite(cmd: WriteCommand): boolean {
     if (this.dryRun) return true; // dry-run não envia nada
     if (this.armed && cmd.risk === 'volatil') return true;
@@ -253,7 +275,7 @@ export class Reader {
   }
 
   async goTo(idx: number): Promise<void> {
-    const link = this.link;
+    const link = this._link;
     if (!link || this.busy || this.writing) return;
     const n = ((idx % NUM_PRESETS) + NUM_PRESETS) % NUM_PRESETS;
     let cmd: WriteCommand;
@@ -275,6 +297,7 @@ export class Reader {
       if (before !== n) {
         this.st.live.clear();
         this.st.editBuffer = null;
+        this.st.editedSinceRead = false;
       }
       this.render();
       const r = await echo;
@@ -319,7 +342,7 @@ export class Reader {
       volume: st.volume,
       presets: st.presets.map((p, i) => (p ? { index: i, name: p.name, hex: hex(p.raw) } : null)),
       live: [...st.live.values()],
-      frames: this.link?.received ?? [],
+      frames: this._link?.received ?? [],
     };
     downloadText(`ge200-dump-${Date.now()}.json`, JSON.stringify(dump, null, 1));
     this.log.info('Dump JSON baixado (presets em hex + todos os frames recebidos).');
@@ -339,9 +362,15 @@ export class Reader {
       .join('')}</div>`;
   }
 
+  /** Avisa outros painéis (editor) que o estado mudou. */
+  notify(): void {
+    for (const fn of this.changeListeners) fn();
+  }
+
   render(): void {
+    this.notify();
     const st = this.st;
-    const connected = !!this.link;
+    const connected = !!this._link;
     const c = this.count();
     const active = st.activeIdx !== null ? st.presets[st.activeIdx] : null;
     const liveBlocks = BLOCKS.map((d) => st.live.get(d.key)).filter(Boolean) as BlockState[];
@@ -368,13 +397,14 @@ export class Reader {
         </div>
       </div>` : ''}
       <h2>Leitura <span class="phase-tag">Fase 2</span> · Troca de preset <span class="phase-tag">Fase 3</span></h2>
+      <p class="hint">Para editar parâmetros e o volume, use a seção <strong>Editar</strong> abaixo.</p>
       ${connected ? '' : '<p class="hint">Conecte via WebHID acima para habilitar.</p>'}
       <div class="btns">
         <button class="big" data-act="identify" ${!connected || this.busy ? 'disabled' : ''}>Identificar</button>
         <button class="big primary" data-act="read" ${!connected || this.busy ? 'disabled' : ''}>Ler presets e parâmetros</button>
       </div>
       <div class="btns">
-        <label class="check"><input type="checkbox" data-act="verbose" ${this.link?.verbose ? 'checked' : ''} ${connected ? '' : 'disabled'}> hex de todos os relatórios no log</label>
+        <label class="check"><input type="checkbox" data-act="verbose" ${this._link?.verbose ? 'checked' : ''} ${connected ? '' : 'disabled'}> hex de todos os relatórios no log</label>
         <button data-act="dump" ${c || st.identity ? '' : 'disabled'}>Baixar dump (JSON)</button>
       </div>
       ${this.busy ? `<div class="progress"><div style="width:${(c / NUM_PRESETS) * 100}%"></div></div><p class="hint">${c} / ${NUM_PRESETS} presets…</p>` : ''}
@@ -382,7 +412,7 @@ export class Reader {
       <dl class="kv2">
         <dt>Aparelho</dt><dd>${st.identity ? esc(`${st.identity.name} · firmware ${st.identity.version}`) : st.fw ? esc(`${st.fw.model} · ${st.fw.version}`) : '—'}</dd>
         <dt>Preset ativo</dt><dd class="big-val">${st.activeIdx !== null ? `${num(st.activeIdx)} · ${esc(active?.name ?? '')}` : '—'}</dd>
-        <dt>Volume do preset</dt><dd>${vol ?? '—'} <small class="muted">(byte 10, a confirmar)</small></dd>
+        <dt>Volume do preset</dt><dd>${vol ?? '—'}</dd>
         ${st.volume !== null ? `<dt>Volume (A2)</dt><dd>${st.volume}</dd>` : ''}
         <dt>Presets lidos</dt><dd>${c} / ${NUM_PRESETS}</dd>
       </dl>
@@ -401,7 +431,7 @@ export class Reader {
       ${sel ? `<h3>Preset ${num(st.selected!)} · ${esc(sel.name)} <small>(da memória, só leitura)</small></h3>
         <div class="btns"><button class="big primary" data-act="goto" ${ready && st.selected !== st.activeIdx ? '' : 'disabled'}>Ir para este preset</button></div>
         ${this.blocksHtml(sel.blocks)}
-        <p class="hint">Volume (byte 10, a confirmar): ${sel.volume} · byte 11: ${sel.flag11} · delay time: ${sel.delayTime} · ordem dos efeitos: ${sel.fxOrder.join(' ')}</p>
+        <p class="hint">Volume: ${sel.volume} · byte 11: ${sel.flag11} · delay time: ${sel.delayTime} · ordem dos efeitos: ${sel.fxOrder.join(' ')}</p>
         <details><summary>bytes brutos (512)</summary><pre class="kv">${hex(sel.raw).replace(/((?:\S\S ){16})/g, '$1\n')}</pre></details>` : ''}
     `;
 
@@ -430,7 +460,7 @@ export class Reader {
     this.root.querySelector<HTMLButtonElement>('[data-act=dump]')!.onclick = () => this.downloadDump();
     const vb = this.root.querySelector<HTMLInputElement>('[data-act=verbose]')!;
     vb.onchange = () => {
-      if (this.link) this.link.verbose = vb.checked;
+      if (this._link) this._link.verbose = vb.checked;
     };
     this.root.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((b) => {
       b.onclick = () => {
