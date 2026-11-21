@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d0f12" />
+    <meta name="color-scheme" content="dark" />
+    <title>GE200 Web</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23f5a524'/><text x='16' y='22' font-size='14' text-anchor='middle' font-family='sans-serif' font-weight='700' fill='%230d0f12'>GE</text></svg>" />
+  </head>
+  <body>
+    <header class="top">
+      <h1>GE200 Web <span class="phase">Fase 1 · diagnóstico</span></h1>
+      <p class="sub">Só leitura: esta página <strong>não envia nenhum comando</strong> para a pedaleira.</p>
+    </header>
+
+    <main>
+      <section class="card" id="env-card">
+        <h2>Ambiente</h2>
+        <div id="warnings"></div>
+        <pre id="env" class="kv"></pre>
+      </section>
+
+      <section class="card">
+        <h2>Conectar a GE200</h2>
+        <p class="hint">Ligue a pedaleira, conecte o cabo USB (no celular: cabo/adaptador OTG) e escolha um dos testes. Faça os dois se puder.</p>
+        <div class="btns">
+          <button id="btn-hid" class="big primary">Conectar via WebHID</button>
+          <button id="btn-usb" class="big">Conectar via WebUSB</button>
+        </div>
+        <div class="btns">
+          <button id="btn-listen" class="big" disabled>Escutar a pedaleira</button>
+          <button id="btn-disc" class="big danger-outline" disabled>Desconectar</button>
+        </div>
+        <p class="hint" id="status">Nenhum dispositivo conectado.</p>
+      </section>
+
+      <section class="card">
+        <div class="log-head">
+          <h2>Log</h2>
+          <div class="btns small">
+            <button id="btn-copy" class="primary">Copiar log</button>
+            <button id="btn-save">Baixar .txt</button>
+            <button id="btn-clear">Limpar</button>
+          </div>
+        </div>
+        <div id="log" class="log" role="log" aria-live="polite"></div>
+      </section>
+
+      <footer class="foot">
+        Protocolo baseado no <a href="https://github.com/ThijsWithaar/MooerManager" target="_blank" rel="noopener">MooerManager</a>
+        de Thijs Withaar (GPL-2.0). Projeto não oficial, sem relação com a Mooer.
+      </footer>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
