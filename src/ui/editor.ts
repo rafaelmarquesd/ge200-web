@@ -137,8 +137,7 @@ export class Editor {
     const n = this.diff.items.length;
     this.log.info(`${title}: ${n === 0 ? 'nenhum preset mudou' : `${n} preset(s) diferentes`}` +
       this.diff.items.slice(0, 20).map((d) => `\n  ${num(d.index)} ${d.name}: ` +
-        d.changes.slice(0, 8).map((c) => `${offsetName(c.offset)} ${c.before}→${c.after}`).join(', ') +
-        (d.changes.length > 8 ? ` (+${d.changes.length - 8})` : '')).join(''));
+        this.describeChanges(d.changes)).join(''));
     this.render();
   }
 
@@ -213,6 +212,24 @@ export class Editor {
     });
   }
 
+  /** Diferenças entre o buffer de edição (86) e a memória (A5) do preset ativo. */
+  private unsavedChanges(): PresetDiff['changes'] {
+    const st = this.st;
+    const mem = st.activeIdx !== null ? st.presets[st.activeIdx] : null;
+    if (!st.editBuffer || !mem) return [];
+    return diffPresets([mem.raw], [st.editBuffer.raw], ['']).flatMap((d) => d.changes);
+  }
+
+  private describeChanges(ch: PresetDiff['changes']): string {
+    // junta bytes do mesmo campo (ex.: DELAY time = 2 bytes)
+    const seen = new Map<string, string>();
+    for (const c of ch) {
+      const n = offsetName(c.offset);
+      if (!seen.has(n)) seen.set(n, `${n} ${c.before}→${c.after}`);
+    }
+    return [...seen.values()].join(', ');
+  }
+
   async sendVolume(): Promise<void> {
     const st = this.st;
     const idx = st.activeIdx;
@@ -240,6 +257,13 @@ export class Editor {
           `Preset ativo: ${num(idx)} "${base.name}"\nVolume: ${before} → ${target}\n\n` +
           'O app vai mandar o preset ativo inteiro de volta para a pedaleira (comando 83, 512 bytes), ' +
           'igual ao que ela mesma mandou, mudando só o byte do volume. Isso carrega no buffer de edição e NÃO salva.\n\n' +
+          (() => {
+            const other = this.unsavedChanges().filter((c) => c.offset !== 10);
+            return other.length
+              ? `ATENÇÃO: o preset ativo já tem alterações NÃO SALVAS na pedaleira (${this.describeChanges(other)}). ` +
+                  'Elas continuam no buffer; se você salvar na pedaleira, serão gravadas junto com o volume.\n\n'
+              : '';
+          })() +
           'Depois confira no display. Para manter, salve na própria pedaleira.\n\nEnviar?',
       );
       if (!ok) {
@@ -347,7 +371,7 @@ export class Editor {
         <label class="filebtn">Comparar com arquivo…<input type="file" accept=".json,application/json" data-ed="file" ${all ? '' : 'disabled'}></label>
       </div>
       ${this.diff ? `<div class="diff"><strong>${esc(this.diff.title)}:</strong> ${this.diff.items.length === 0 ? 'nenhum preset mudou.' :
-        `<ul>${this.diff.items.map((d) => `<li>${num(d.index)} ${esc(d.name)}: ${d.changes.slice(0, 6).map((c) => `${esc(offsetName(c.offset))} <b>${c.before}→${c.after}</b>`).join(', ')}${d.changes.length > 6 ? ` (+${d.changes.length - 6})` : ''}</li>`).join('')}</ul>`}</div>` : ''}
+        `<ul>${this.diff.items.map((d) => `<li>${num(d.index)} ${esc(d.name)}: ${esc(this.describeChanges(d.changes))}</li>`).join('')}</ul>`}</div>` : ''}
 
       <h3>2. Preset Volume <small>(experimental)</small></h3>
       ${!base ? '<p class="hint">—</p>' : `
@@ -358,6 +382,10 @@ export class Editor {
           <button class="vbtn" data-vol="1">+1</button><button class="vbtn" data-vol="5">+5</button>
           <span class="volval" id="volval">${this.volTarget ?? '—'}</span>
         </div>
+        ${(() => {
+          const ch = this.unsavedChanges();
+          return ch.length ? `<p class="warn-box warn">O preset ativo na pedaleira está <b>diferente da memória</b> (alterações não salvas): ${esc(this.describeChanges(ch))}.</p>` : '';
+        })()}
         ${st.editedSinceRead ? '<p class="warn-box warn">Você editou blocos depois da última leitura. Para não desfazer essas edições, salve-as na pedaleira e toque em "Ler presets e parâmetros" antes de mudar o volume.</p>' : ''}
         ${!backupNow ? '<p class="warn-box warn">Exporte o backup (passo 1) para liberar.</p>' : ''}
         <div class="btns">

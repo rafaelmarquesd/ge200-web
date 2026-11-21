@@ -1,6 +1,7 @@
 /** Backup dos presets: formato do arquivo, exportação .mo e comparação. Puro, sem I/O. */
 
 import { hex } from './frame';
+import { BLOCKS } from './blocks';
 
 export const BACKUP_FORMAT = 'ge200-web-backup';
 
@@ -103,12 +104,13 @@ export function offsetName(o: number): string {
   if (o === 10) return 'VOLUME do preset';
   if (o === 11) return 'byte 11';
   if (o < 28) return 'nome';
-  const blocks = ['FX', 'DS', 'AMP', 'CAB', 'NS', 'EQ', 'MOD', 'DELAY', 'REVERB'];
   if (o < 100) {
-    const b = Math.floor((o - 28) / 8);
+    const def = BLOCKS[Math.floor((o - 28) / 8)];
     const k = (o - 28) % 8;
-    return `${blocks[b]} ${k === 0 ? 'tipo' : k === 1 ? 'on/off' : `parâmetro ${k - 1}`}`;
+    return `${def.label} ${k === 0 ? 'tipo' : k === 1 ? 'on/off' : def.savedFields[k - 2] ?? `byte ${k}`}`;
   }
+  if (o >= 344 && o <= 349) return `EQ freq ${Math.floor((o - 344) / 2) + 1}`;
   if (o === 350 || o === 351) return 'DELAY time';
+  if (o === 352 || o === 353) return 'DELAY p5';
   return `offset ${o}`;
 }

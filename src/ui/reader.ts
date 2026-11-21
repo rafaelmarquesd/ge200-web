@@ -115,6 +115,25 @@ export class Reader {
       case 0xa2:
         if (p.length >= 1) st.volume = p[0];
         break;
+      case 0xa9:
+        // a pedaleira salvou um preset (no próprio aparelho): idx + 512 bytes do que foi gravado
+        if (p.length >= 1 + PRESET_SIZE && p[0] < NUM_PRESETS) {
+          try {
+            const saved = decodeSavedPreset(p.slice(1, 1 + PRESET_SIZE));
+            st.presets[p[0]] = saved;
+            if (p[0] === st.activeIdx) {
+              st.editBuffer = saved;
+              st.editedSinceRead = false;
+            }
+            this.log.ok(`A pedaleira gravou o preset ${num(p[0])} "${saved.name}" (volume ${saved.volume}). Lista do app atualizada.`);
+          } catch (e) {
+            this.log.error('A9: ' + errText(e));
+          }
+        }
+        break;
+      case 0xa8:
+        if (p.length >= 1) this.log.info(`Pedaleira confirmou gravação: preset ${num(p[0])} "${ascii(p.subarray(1))}".`);
+        break;
       case 0x82:
         if (p.length >= 1) st.menu = p[0];
         break;
@@ -379,13 +398,14 @@ export class Reader {
     const prevScroll = this.root.querySelector('.plist')?.scrollTop ?? 0;
     const ready = connected && c === NUM_PRESETS && st.activeIdx !== null && !this.busy && !this.writing;
     const vol = (st.editBuffer ?? active)?.volume;
+    const unsaved = !!(st.editBuffer && active && st.editBuffer.raw.some((b, i) => b !== active.raw[i]));
     this.root.innerHTML = `
       ${connected && c === NUM_PRESETS ? `
       <div class="stage">
         <div class="stage-now">
           <span class="stage-num">${st.activeIdx !== null ? num(st.activeIdx) : '—'}</span>
           <span class="stage-name">${esc(active?.name ?? '—')}</span>
-          <span class="stage-vol">${vol !== undefined ? `volume ${vol}` : ''}</span>
+          <span class="stage-vol">${vol !== undefined ? `volume ${vol}` : ''}${unsaved ? ' · <b class="unsaved">não salvo</b>' : ''}</span>
         </div>
         <div class="stage-btns">
           <button class="huge" data-act="prev" ${ready ? '' : 'disabled'} aria-label="Preset anterior">◀</button>

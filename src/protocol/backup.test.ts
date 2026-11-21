@@ -34,7 +34,11 @@ describe('backup', () => {
     const d = diffPresets([preset(100), preset(50)], [preset(100), preset(65)], ['A', 'B']);
     expect(d).toEqual([{ index: 1, name: 'B', changes: [{ offset: 10, before: 50, after: 65 }] }]);
     expect(offsetName(10)).toBe('VOLUME do preset');
-    expect(offsetName(46)).toBe('AMP parâmetro 1');
+    expect(offsetName(46)).toBe('AMP gain');
+    expect(offsetName(86)).toBe('DELAY level');
+    expect(offsetName(89)).toBe('DELAY subd');
+    expect(offsetName(88)).toBe('DELAY byte 4');
+    expect(offsetName(352)).toBe('DELAY p5');
   });
 });
 

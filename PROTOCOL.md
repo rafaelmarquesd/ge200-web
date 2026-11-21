@@ -157,6 +157,8 @@ Todos os campos são **u16 big-endian**, em sequência:
 | `A2` | **Volume**: 1 byte. O código chama de "global patch volume". **Não apareceu** no dump real. | 🟡 ver §7 |
 | `86` | ✅ **preset ativo completo** (512 bytes, formato salvo). Visto no aparelho: idêntico ao `A5` do preset ativo. Provavelmente é o buffer de edição. | ✅ |
 | `BB` | `00 00` — visto no aparelho, significado desconhecido | ❓ |
+| `A9` | ✅ **enviado espontaneamente quando o preset é salvo NO APARELHO**: `idx` + 512 bytes gravados | ✅ |
+| `A8` | ✅ logo depois do `A9`: `idx` + nome (14 bytes). Ex.: `A8 1C "DEE CORE RIFF"`. Indica que o 2º byte do `A8` é o **índice do preset** — o `A8 A5` fixo do MooerManager parece ser um bug dele | ✅ (recebido) |
 | `A3` | atribuição do pedal de expressão (7 bytes) | ✅ |
 | `A4` | Rhythm/PatchAlternate (enviado ao apertar CTRL TAP) | 🟡 |
 | `82` | menu ativo no display | ✅ |
@@ -197,10 +199,11 @@ Conferido no aparelho (dump da Fase 2): os 9 blocos salvos do preset ativo batem
 | 60 | 8 | NS: type, enabled, attack, release, thresh, … |
 | 68 | 8 | EQ: type, enabled, bandas… (valor 12 = 0 dB) |
 | 76 | 8 | MOD: type, enabled, rate, level, depth, p4, -, - ✅ |
-| 84 | 8 | DELAY: type, enabled, level, feedback, -, subd?, -, subd (offset 91) |
+| 84 | 8 | DELAY: type, enabled, level, feedback, ?, **subd (offset 89 ✅)**, ?, ? |
 | 92 | 8 | REVERB: type, enabled, pre-delay, level, decay, tone |
 | 344 | 6 | 3× u16 LE (ex. 100, 600, 1250): os mesmos 3 valores aparecem em BE no fim do frame ao vivo EQ `96` — provavelmente frequências do EQ custom 🟡 |
-| 350 | 2 | DELAY time, u16 **little-endian** ✅ (preset 28: 140 = campo `time` do frame `98`) |
+| 350 | 2 | DELAY time, u16 **little-endian** ✅ (preset 28: 140 = campo `time` do frame `98`; depois 1249) |
+| 352 | 2 | DELAY p5, u16 LE ✅ (2498 = campo `p5` do frame `98`) |
 | resto | | desconhecido |
 
 Atenção: no arquivo/preset salvo os campos são **1 byte** e a ordem é `type, enabled`;
@@ -213,7 +216,10 @@ nos blocos em tempo real (§4) são **u16 BE** e a ordem é `enabled, type`.
 **Confirmado:** o Preset Volume é o **byte 10 do preset** (0..100), conferido no display da pedaleira. A mensagem `A2` não
 aparece. Escrita (Fase 4, experimental): o app manda `83` + os 512 bytes do preset ativo (vindos do `86` ou do `A5`)
 com só o byte 10 alterado, o que carrega no buffer de edição sem salvar. O usuário salva no botão da pedaleira,
-e o app relê e compara com o backup. **O `A8` continua sem ser enviado.** Depois, descobrir
+e o app relê e compara com o backup. **O `A8` continua sem ser enviado.**
+
+✅ Teste no aparelho (0.4.0): depois do `83` com volume 95, a releitura trouxe `86` (buffer) com volume 95 e `A5`
+(memória) com 100 — o comando foi aceito e não grava sozinho. Depois, descobrir
 como escrever: (a) mandar o preset inteiro com `83` + salvar com `A8`, ou (b) algum comando direto. Nada disso será
 enviado sem backup e confirmação.
 

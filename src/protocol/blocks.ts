@@ -50,7 +50,8 @@ export const BLOCKS: BlockDef[] = [
   { key: 'mod', label: 'MOD', cmd: 0x97, liveFields: ['rate', 'level', 'depth', 'p4', 'p5'],
     savedFields: ['rate', 'level', 'depth', 'p4', null, null], types: MOD_TYPES },
   { key: 'dly', label: 'DELAY', cmd: 0x98, liveFields: ['level', 'feedback', 'time', 'subd', 'p5', 'p6'],
-    savedFields: ['level', 'feedback', null, null, null, 'subd'] },
+    // offset 89 = subd (confirmado: mudou junto com o frame ao vivo). time em 350 e p5 em 352 (u16 LE).
+    savedFields: ['level', 'feedback', null, 'subd', null, null] },
   { key: 'rvb', label: 'REVERB', cmd: 0x99, liveFields: ['preDelay', 'level', 'decay', 'tone'],
     savedFields: ['preDelay', 'level', 'decay', 'tone', null, null] },
 ];
