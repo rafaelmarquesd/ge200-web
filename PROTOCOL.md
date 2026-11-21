@@ -30,9 +30,13 @@ Fonte: `doc/endpoints.txt` (lsusb do aparelho real).
 | 2 | 0/1 | 0x01 Áudio / Streaming | `0x01` OUT isócrono, 276 B | Reprodução: áudio **do** host para a pedaleira, 2 canais, 24 bits, 44,1 kHz |
 | **3** | 0 | **0x03 HID** | `0x81` IN interrupt 64 B (intervalo 10 ms), `0x02` OUT interrupt 64 B (intervalo 10 ms) | **Controle (este protocolo)** |
 
-- O descritor de relatório HID tem 27 bytes, mas o lsusb não conseguiu lê-lo ("UNAVAILABLE").
-  ❓ Pelo tamanho, deve ser uma coleção *vendor-defined* (usage page 0xFFxx) com um relatório de entrada
-  e um de saída de 64 bytes, **sem report ID**. A página de diagnóstico (Fase 1) mostra isso pelo WebHID.
+- O descritor de relatório HID tem 27 bytes (o lsusb não conseguiu lê-lo).
+  ✅ **Confirmado no aparelho (teste da Fase 1, Windows, Chrome 157, WebHID):** uma coleção com usagePage 0x0001,
+  usage 0x0000, um relatório INPUT e um OUTPUT de **64 bytes, reportId 0 (sem report ID)**,
+  itens 8 bits × 64, usages 0x00010001..0x00010008, faixa lógica 0..255 (o Chrome mostra 0..-1 por sinal).
+  Não é uma coleção protegida: `open()` funcionou sem driver extra e sem admin.
+- ✅ Durante a escuta passiva (sem enviar nada) a pedaleira **não mandou nenhum relatório**. Isso é compatível
+  com ela só começar a reportar depois do pedido de identificação.
 
 ### Consequência importante para o navegador ✅
 
@@ -49,8 +53,8 @@ Ou seja: **pelo WebUSB não dá para controlar a GE200**. O caminho é o **WebHI
 | iPhone | não existe | não existe |
 
 Os relatórios HID têm exatamente os mesmos 64 bytes que o MooerManager envia/recebe por libusb.
-❓ Com WebHID, envio = `device.sendReport(0, pacote64)` e recepção = evento `inputreport`
-(supondo que não haja report ID; o dump das coleções na Fase 1 confirma).
+Com WebHID, envio = `device.sendReport(0, pacote64)` e recepção = evento `inputreport`
+(✅ sem report ID, confirmado no aparelho; 🟡 o envio ainda será testado na Fase 2).
 
 ---
 

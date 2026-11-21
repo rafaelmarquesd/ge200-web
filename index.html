@@ -10,8 +10,8 @@
   </head>
   <body>
     <header class="top">
-      <h1>GE200 Web <span class="phase">Fase 1 · diagnóstico</span></h1>
-      <p class="sub">Só leitura: esta página <strong>não envia nenhum comando</strong> para a pedaleira.</p>
+      <h1>GE200 Web <span class="phase">Fase 2 · leitura</span></h1>
+      <p class="sub">Só leitura: esta versão só envia <strong>pedidos de leitura</strong> (identificar e listar presets), e pede sua confirmação antes. Nada é alterado na pedaleira.</p>
     </header>
 
     <main>
@@ -23,7 +23,7 @@
 
       <section class="card">
         <h2>Conectar a GE200</h2>
-        <p class="hint">Ligue a pedaleira, conecte o cabo USB (no celular: cabo/adaptador OTG) e escolha um dos testes. Faça os dois se puder.</p>
+        <p class="hint">Ligue a pedaleira e conecte o cabo USB (no celular: cabo/adaptador OTG). Use <strong>WebHID</strong>; o botão WebUSB fica só como diagnóstico.</p>
         <div class="btns">
           <button id="btn-hid" class="big primary">Conectar via WebHID</button>
           <button id="btn-usb" class="big">Conectar via WebUSB</button>
@@ -34,6 +34,8 @@
         </div>
         <p class="hint" id="status">Nenhum dispositivo conectado.</p>
       </section>
+
+      <section class="card" id="reader"></section>
 
       <section class="card">
         <div class="log-head">

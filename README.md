@@ -10,8 +10,8 @@ Site estático (GitHub Pages, HTTPS), interface em português, tema escuro, feit
 | Fase | O que | Estado |
 |---|---|---|
 | 0 | Estudo do protocolo → [PROTOCOL.md](PROTOCOL.md) | feito |
-| 1 | Página de diagnóstico (só leitura) | feito, aguardando teste no aparelho |
-| 2 | Leitura de identificação, presets e parâmetros | — |
+| 1 | Página de diagnóstico (só leitura) | feito — WebHID confirmado no Windows |
+| 2 | Leitura de identificação, presets e parâmetros | feito, aguardando teste no aparelho |
 | 3 | Troca de preset | — |
 | 4 | Edição de parâmetros, Preset Volume, backup, dry-run | — |
 | 5 | Auto-nivelador de volume (experimental) | — |

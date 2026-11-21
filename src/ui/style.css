@@ -113,3 +113,33 @@ button:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
   background: var(--ok); color: #052e16; font-weight: 700; padding: 10px 18px; border-radius: 999px;
   box-shadow: 0 6px 24px #0008; z-index: 10;
 }
+
+/* Fase 2 */
+h3 { font-size: .98rem; margin: 18px 0 8px; }
+h3 small, .phase-tag { font-weight: 500; color: var(--muted); font-size: .78rem; }
+.phase-tag { border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; margin-left: 6px; vertical-align: middle; }
+.check { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .9rem; flex: 1 1 220px; min-height: 44px; }
+.check input { width: 22px; height: 22px; accent-color: var(--accent); }
+.progress { height: 10px; background: #0a0c0f; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; margin: 6px 0; }
+.progress > div { height: 100%; background: var(--accent); transition: width .2s; }
+.kv2 { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 14px 0 0; }
+.kv2 dt { color: var(--muted); }
+.kv2 dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.big-val { font-size: 1.2rem; color: var(--accent); }
+.blocks { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.block { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #12161b; }
+.block.off { opacity: .55; }
+.bhead { display: flex; justify-content: space-between; align-items: center; }
+.bname { font-weight: 700; font-size: .9rem; }
+.badge { font-size: .7rem; font-weight: 800; border-radius: 6px; padding: 1px 6px; background: #333c48; }
+.block.on .badge { background: var(--ok); color: #052e16; }
+.btype { color: var(--accent); font-size: .85rem; margin: 4px 0 6px; overflow-wrap: anywhere; }
+.block dl { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; margin: 0; font-size: .82rem; }
+.block dt { color: var(--muted); }
+.block dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.plist { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px; max-height: 50vh; overflow: auto; }
+.pitem { text-align: left; min-height: 48px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pitem .pn { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 4px; }
+.pitem.active { border-color: var(--accent); color: var(--accent); }
+.pitem.sel { background: #2b3440; }
+details summary { cursor: pointer; color: var(--muted); margin: 6px 0; min-height: 32px; }

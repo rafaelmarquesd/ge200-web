@@ -5,6 +5,8 @@ import { WebUsbDiag } from './usb/webusb-diag';
 import { WebHidDiag } from './usb/webhid-diag';
 import { errText } from './usb/explain';
 import { PRODUCT_ID, VENDOR_ID } from './protocol/constants';
+import { Ge200Link } from './usb/hid-link';
+import { Reader } from './ui/reader';
 
 declare const __APP_VERSION__: string;
 declare const __BUILD_TIME__: string;
@@ -41,6 +43,14 @@ for (const w of envWarnings(env)) log.add(w.level === 'error' ? 'error' : w.leve
 const usb = new WebUsbDiag(log, env);
 const hid = new WebHidDiag(log, env);
 let active: 'usb' | 'hid' | null = null;
+let link: Ge200Link | null = null;
+const reader = new Reader($('reader'), log, __APP_VERSION__);
+
+function dropLink(): void {
+  link?.close();
+  link = null;
+  reader.detach();
+}
 let listening = false;
 
 const btnHid = $<HTMLButtonElement>('btn-hid');
@@ -55,7 +65,7 @@ if (!env.hasHid) btnHid.textContent = 'WebHID indisponível';
 if (!env.hasUsb) btnUsb.textContent = 'WebUSB indisponível';
 
 function refresh(): void {
-  const canListen = active === 'usb' ? usb.canListen : active === 'hid' ? hid.isOpen : false;
+  const canListen = active === 'usb' ? usb.canListen : false;
   btnListen.disabled = !canListen;
   btnListen.textContent = listening ? 'Parar escuta' : 'Escutar a pedaleira';
   btnDisc.disabled = active === null;
@@ -64,6 +74,8 @@ function refresh(): void {
   status.textContent =
     active === null
       ? 'Nenhum dispositivo conectado.'
+      : active === 'hid' && link
+      ? 'Conectado via WebHID — ouvindo a pedaleira. Use a seção Leitura abaixo.'
       : `Conectado via ${active === 'usb' ? 'WebUSB' : 'WebHID'}` +
         (canListen ? ' — pronto para escutar.' : ' — mas sem acesso à interface de controle (veja o log).');
 }
@@ -81,6 +93,11 @@ btnHid.onclick = () =>
   guard(async () => {
     await hid.connect();
     if (hid.device) active = 'hid';
+    if (hid.device?.opened) {
+      link = new Ge200Link(hid.device, log);
+      reader.attach(link);
+      log.info('Ouvindo a pedaleira (relatórios de entrada). Agora use "Identificar" ou "Ler presets e parâmetros".');
+    }
   });
 
 btnUsb.onclick = () =>
@@ -112,7 +129,10 @@ btnDisc.onclick = () =>
   guard(async () => {
     listening = false;
     if (active === 'usb') await usb.disconnect();
-    if (active === 'hid') await hid.disconnect();
+    if (active === 'hid') {
+      dropLink();
+      await hid.disconnect();
+    }
     active = null;
   });
 
@@ -165,6 +185,7 @@ async function listKnown(): Promise<void> {
     navigator.hid.addEventListener('disconnect', (ev) => {
       log.warn(`WebHID: dispositivo desconectado: ${ev.device.productName}`);
       if (active === 'hid' && ev.device === hid.device) {
+        dropLink();
         active = null;
         listening = false;
         hid.device = null;
