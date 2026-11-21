@@ -72,6 +72,8 @@ export const CMD_NAMES: Record<number, string> = {
   0x83: 'Preset',
   0x84: 'Identify/FW?',
   0x85: 'CabModels',
+  0x86: 'ActivePresetData',
+  0xbb: 'desconhecido-BB',
   0x89: 'FootSwitch',
   0x90: 'FX/COMP',
   0x91: 'DS/OD',

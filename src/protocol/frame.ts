@@ -154,7 +154,9 @@ export function describeFrame(f: Frame): string {
   } else if (f.cmd === 0xa6 && f.params.length >= 1) {
     s += ` preset=${f.params[0]} (exibido como ${f.params[0] + 1})`;
   } else if (f.cmd === 0xa5 && f.params.length >= 1 + 28) {
-    s += ` preset=${f.params[0]} nome="${ascii(f.params.subarray(1 + 12, 1 + 28))}"`;
+    s += ` preset=${f.params[0]} nome="${ascii(f.params.subarray(1 + 12, 1 + 28))}" volume?=${f.params[1 + 10]}`;
+  } else if (f.cmd === 0x86 && f.params.length >= 28) {
+    s += ` nome="${ascii(f.params.subarray(12, 28))}" volume?=${f.params[10]}`;
   } else if (f.cmd === 0xa2 && f.params.length >= 1) {
     s += ` valor=${f.params[0]}`;
   } else if (f.cmd === 0x82 && f.params.length >= 1) {

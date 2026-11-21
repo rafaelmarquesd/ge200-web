@@ -34,20 +34,21 @@ export const MOD_TYPES = ['Phaser', 'Step Phaser', 'Fat Phaser', 'Flanger', 'Jet
 
 /** Ordem igual à do preset salvo (offset 28 + 8*i). */
 export const BLOCKS: BlockDef[] = [
-  { key: 'fx', label: 'FX/COMP', cmd: 0x90, liveFields: ['q', 'position', 'peak', 'level'],
-    savedFields: ['attack', 'thresh', 'ratio', 'level', null, null], types: FX_TYPES },
+  { key: 'fx', label: 'FX/COMP', cmd: 0x90, liveFields: ['p1', 'p2', 'p3', 'level'],
+    // significado de p1..p3 depende do tipo (wah: q/position/peak; comp: attack/thresh/ratio)
+    savedFields: ['p1', 'p2', 'p3', 'level', null, null], types: FX_TYPES },
   { key: 'ds', label: 'DS/OD', cmd: 0x91, liveFields: ['volume', 'tone', 'gain'],
     savedFields: ['volume', 'tone', 'gain', null, null, null], types: DS_TYPES },
   { key: 'amp', label: 'AMP', cmd: 0x93, liveFields: ['gain', 'bass', 'mid', 'treble', 'pres', 'mst'],
     savedFields: ['gain', 'bass', 'mid', 'treble', 'pres', 'mst'], types: AMP_MODEL_NAMES },
   { key: 'cab', label: 'CAB', cmd: 0x94, liveFields: ['mic', 'center', 'distance', 'tube'],
-    savedFields: ['mic', 'center', 'distance', null, null, null], types: CAB_MODEL_NAMES },
+    savedFields: ['mic', 'center', 'distance', 'tube', null, null], types: CAB_MODEL_NAMES },
   { key: 'ns', label: 'NS GATE', cmd: 0x95, liveFields: ['attack', 'release', 'thresh'],
     savedFields: ['attack', 'release', 'thresh', null, null, null], types: NS_TYPES },
   { key: 'eq', label: 'EQ', cmd: 0x96, liveFields: ['band1', 'band2', 'band3', 'band4', 'band5', 'band6'],
     savedFields: ['band1', 'band2', 'band3', 'band4', 'band5', 'band6'], types: EQ_TYPES },
   { key: 'mod', label: 'MOD', cmd: 0x97, liveFields: ['rate', 'level', 'depth', 'p4', 'p5'],
-    savedFields: ['rate', 'level', 'depth', null, null, null], types: MOD_TYPES },
+    savedFields: ['rate', 'level', 'depth', 'p4', null, null], types: MOD_TYPES },
   { key: 'dly', label: 'DELAY', cmd: 0x98, liveFields: ['level', 'feedback', 'time', 'subd', 'p5', 'p6'],
     savedFields: ['level', 'feedback', null, null, null, 'subd'] },
   { key: 'rvb', label: 'REVERB', cmd: 0x99, liveFields: ['preDelay', 'level', 'decay', 'tone'],
@@ -89,8 +90,12 @@ export interface SavedPreset {
   name: string;
   fxOrder: number[];
   blocks: BlockState[];
-  /** DELAY time, u16 LE no offset 350 (segundo mooerMoConvert, não confirmado). */
+  /** DELAY time, u16 LE no offset 350 (confirmado: bate com o frame ao vivo 0x98). */
   delayTime: number;
+  /** Byte 10: muito provavelmente o Preset Volume (0..100). O MooerManager lia como u16 "size". */
+  volume: number;
+  /** Byte 11: 0 ou 1, significado desconhecido. */
+  flag11: number;
   raw: Uint8Array;
 }
 
@@ -113,6 +118,8 @@ export function decodeSavedPreset(p: Uint8Array): SavedPreset {
     fxOrder: Array.from(p.subarray(0, 10)),
     blocks,
     delayTime: p.length > 351 ? p[350] | (p[351] << 8) : 0,
+    volume: p[10],
+    flag11: p[11],
     raw: p,
   };
 }

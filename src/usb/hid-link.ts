@@ -5,6 +5,7 @@
 
 import { FrameAssembler, describeFrame, hex, packetize, type Frame } from '../protocol/frame';
 import type { Log } from '../ui/log';
+import type { WriteCommand } from '../protocol/commands';
 
 export type FrameListener = (f: Frame) => void;
 
@@ -40,6 +41,20 @@ export class Ge200Link {
       if (this.verbose) this.log.add('tx', `  relatório 64B: ${hex(p.subarray(0, p[0] + 1))}`);
       await this.device.sendReport(0, p);
     }
+  }
+
+  /**
+   * Envia um comando de ESCRITA. Em dry-run só registra o que SERIA enviado.
+   * A confirmação do usuário é responsabilidade da UI (sempre antes de chamar isto).
+   */
+  async sendWrite(cmd: WriteCommand, dryRun: boolean): Promise<boolean> {
+    if (dryRun) {
+      this.log.add('tx', `DRY-RUN (NÃO enviado) ${cmd.label} [${cmd.risk}]: ${hex(cmd.frame)}\n` +
+        packetize(cmd.frame).map((p) => `  relatório 64B: ${hex(p.subarray(0, p[0] + 1))}`).join('\n'));
+      return false;
+    }
+    await this.send(cmd.frame, `ESCRITA ${cmd.label} [${cmd.risk}]`);
+    return true;
   }
 
   /** Espera um frame que satisfaça pred, ou null depois de timeoutMs. */

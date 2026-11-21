@@ -154,13 +154,22 @@ Todos os campos são **u16 big-endian**, em sequência:
 | `A9` | `idx` + dados do preset ativo (o MooerManager ignora) | 🟡 |
 | `90`–`99` | blocos do preset ativo, mesmo formato u16 BE da tabela acima | ✅ |
 | `A1` | System (10 bytes u8) | ✅ |
-| `A2` | **Volume**: 1 byte. O código chama de "global patch volume". | 🟡 ver §7 |
+| `A2` | **Volume**: 1 byte. O código chama de "global patch volume". **Não apareceu** no dump real. | 🟡 ver §7 |
+| `86` | ✅ **preset ativo completo** (512 bytes, formato salvo). Visto no aparelho: idêntico ao `A5` do preset ativo. Provavelmente é o buffer de edição. | ✅ |
+| `BB` | `00 00` — visto no aparelho, significado desconhecido | ❓ |
 | `A3` | atribuição do pedal de expressão (7 bytes) | ✅ |
 | `A4` | Rhythm/PatchAlternate (enviado ao apertar CTRL TAP) | 🟡 |
 | `82` | menu ativo no display | ✅ |
 | `89` | modo do footswitch (0 normal, 1 confirmação) | ✅ |
 | `E3` / `85` | nomes dos 10 amps USER / 10 cabs USER (15 bytes cada) | ✅ |
 | `E1` / `E2` | confirmação de upload | ✅ |
+
+### Sequência real observada (Fase 2, firmware 2.0.4) ✅
+1. Host `84 00 00` → pedaleira `10` (`84 "2.0.4" "MOOER_GE200"`, ou seja, o 1º byte é o próprio 0x84).
+2. Host `E0 00×7` (**sem o flush** — não foi necessário) → 200× `A5` em ~16 s, depois
+   `90 91 93 94 95 96 97 98 99`, `A1`, `A3`, `A4`, `BB`, `A6`, `84`, `85`, `E3`, `86`, `89`, `82`.
+3. Trocando de preset **no pé**, a pedaleira manda só `A6 idx` — **não** reenvia os blocos nem o `86`.
+4. Zero erros de CRC em 229 frames.
 
 ### Sequência de conexão usada pelo Mooer Studio (segundo o MooerManager) ✅
 1. `84 00 00` (identify) duas vezes.
@@ -173,21 +182,25 @@ Todos os campos são **u16 big-endian**, em sequência:
 
 ## 6. Formato do preset (512 bytes, igual ao arquivo `.mo` a partir do offset 0x200) ✅
 
+Conferido no aparelho (dump da Fase 2): os 9 blocos salvos do preset ativo batem byte a byte com os frames ao vivo `90..99`.
+
 | Offset | Tamanho | Campo |
 |---|---|---|
-| 0 | 10 | ordem dos efeitos |
-| 10 | 2 | tamanho (u16 BE) |
+| 0 | 10 | ordem dos efeitos (ex.: `01..09 00`, ou `05 01 02 03 06 07 08 09 04 00` com EQ na frente) |
+| 10 | 1 | 🟡 **Preset Volume (0..100), muito provável.** O MooerManager chamava 10–11 de "tamanho u16 BE". No dump: 149 presets com 100, toda a série "CF DC30" com 50, outros com 75, 80, 70, 98… Falta só confirmar com o display da pedaleira. |
+| 11 | 1 | ❓ 0 ou 1 (31 presets com 1), significado desconhecido |
 | 12 | 16 | nome (ASCII, completado com zeros) |
 | 28 | 8 | FX/COMP: type, enabled, attack, thresh, ratio, level, -, - |
 | 36 | 8 | DS/OD: type, enabled, volume, tone, gain, -, -, - |
 | 44 | 8 | AMP: type, enabled, gain, bass, mid, treble, pres, mst |
-| 52 | 8 | CAB: type, enabled, (tube?), mic, center, distance, … |
+| 52 | 8 | CAB: type, enabled, mic, center, distance, tube, -, - ✅ |
 | 60 | 8 | NS: type, enabled, attack, release, thresh, … |
 | 68 | 8 | EQ: type, enabled, bandas… (valor 12 = 0 dB) |
-| 76 | 8 | MOD: type, enabled, rate, level, depth, … |
-| 84 | 8 | DELAY: type, enabled, level, feedback, …, sub-d (offset 91) |
+| 76 | 8 | MOD: type, enabled, rate, level, depth, p4, -, - ✅ |
+| 84 | 8 | DELAY: type, enabled, level, feedback, -, subd?, -, subd (offset 91) |
 | 92 | 8 | REVERB: type, enabled, pre-delay, level, decay, tone |
-| 350 | 2 | DELAY time (u16 **little-endian**, segundo o mooer.php) 🟡 |
+| 344 | 6 | 3× u16 LE (ex. 100, 600, 1250): os mesmos 3 valores aparecem em BE no fim do frame ao vivo EQ `96` — provavelmente frequências do EQ custom 🟡 |
+| 350 | 2 | DELAY time, u16 **little-endian** ✅ (preset 28: 140 = campo `time` do frame `98`) |
 | resto | | desconhecido |
 
 Atenção: no arquivo/preset salvo os campos são **1 byte** e a ordem é `type, enabled`;
@@ -195,9 +208,14 @@ nos blocos em tempo real (§4) são **u16 BE** e a ordem é `enabled, type`.
 
 ---
 
-## 7. Preset Volume ❓
+## 7. Preset Volume 🟡
 
-**Não está claro no MooerManager.** O que existe:
+**Atualização com o dump real:** o candidato forte é o **byte 10 do preset** (0..100), veja §6. A mensagem `A2` não
+apareceu. Próximo passo: confirmar comparando com o valor mostrado no menu de volume da pedaleira. Depois, descobrir
+como escrever: (a) mandar o preset inteiro com `83` + salvar com `A8`, ou (b) algum comando direto. Nada disso será
+enviado sem backup e confirmação.
+
+Texto original da Fase 0. **Não está claro no MooerManager.** O que existe:
 - Mensagem recebida `A2` com 1 byte, chamada de "The global patch volume". O MooerManager só lê e repassa via MIDI CC 7; **não há comando de envio**.
 - Nenhum campo do preset de 512 bytes foi identificado como volume.
 

@@ -7,6 +7,7 @@
 import { BLOCKS, decodeLiveBlock, decodeSavedPreset, PRESET_SIZE, type BlockState, type SavedPreset } from '../protocol/blocks';
 import { ascii, hex, type Frame } from '../protocol/frame';
 import { identifyRequest, patchListRequest } from '../protocol/requests';
+import { presetChange, type WriteCommand } from '../protocol/commands';
 import type { Ge200Link } from '../usb/hid-link';
 import { errText } from '../usb/explain';
 import { downloadText, type Log } from './log';
@@ -18,6 +19,7 @@ interface State {
   fw: { version: string; model: string } | null;
   activeIdx: number | null;
   volume: number | null;
+  editBuffer: SavedPreset | null;
   presets: (SavedPreset | null)[];
   live: Map<string, BlockState>;
   other: Map<number, string>;
@@ -33,6 +35,10 @@ export class Reader {
   private busy = false;
   private st: State = Reader.empty();
   private off: (() => void) | null = null;
+  /** Escrita liberada pelo usuário nesta sessão (depois da confirmação). */
+  private armed = false;
+  private dryRun = false;
+  private writing = false;
 
   constructor(private root: HTMLElement, private log: Log, private appVersion: string) {
     this.render();
@@ -40,7 +46,7 @@ export class Reader {
 
   private static empty(): State {
     return {
-      identity: null, fw: null, activeIdx: null, volume: null,
+      identity: null, fw: null, activeIdx: null, volume: null, editBuffer: null,
       presets: new Array(NUM_PRESETS).fill(null), live: new Map(), other: new Map(), selected: null,
     };
   }
@@ -76,8 +82,20 @@ export class Reader {
       case 0xa6:
         if (p.length >= 1) {
           // troca de preset: os blocos antigos deixam de valer (o aparelho deve mandar os novos em seguida — suposição)
-          if (st.activeIdx !== null && st.activeIdx !== p[0]) st.live.clear();
+          if (st.activeIdx !== null && st.activeIdx !== p[0]) {
+            st.live.clear();
+            st.editBuffer = null;
+          }
           st.activeIdx = p[0];
+        }
+        break;
+      case 0x86:
+        if (p.length >= PRESET_SIZE) {
+          try {
+            st.editBuffer = decodeSavedPreset(p.slice(0, PRESET_SIZE));
+          } catch (e) {
+            this.log.error('0x86: ' + errText(e));
+          }
         }
         break;
       case 0xa2:
@@ -211,6 +229,66 @@ export class Reader {
     }
   }
 
+  // ---------- escrita (Fase 3) ----------
+
+  private confirmWrite(cmd: WriteCommand): boolean {
+    if (this.dryRun) return true; // dry-run não envia nada
+    if (this.armed && cmd.risk === 'volatil') return true;
+    const ok = window.confirm(
+      (cmd.risk === 'permanente' ? '⚠️ GRAVAÇÃO PERMANENTE na memória da pedaleira.\n\n' : '') +
+        'O app vai enviar um COMANDO DE ESCRITA para a pedaleira:\n\n' +
+        `${cmd.label}\n${hex(cmd.frame)}\n\n` +
+        (cmd.risk === 'volatil'
+          ? 'Isto só troca o preset ativo, como pisar no footswitch. Não grava nada na memória.\n\n' +
+            'Se você confirmar, as próximas trocas de preset nesta sessão serão enviadas direto ' +
+            '(dá para bloquear de novo no botão "Bloquear escrita").\n\nEnviar?'
+          : 'Enviar?'),
+    );
+    if (ok && cmd.risk === 'volatil') {
+      this.armed = true;
+      this.log.ok('Usuário liberou comandos de troca de preset nesta sessão.');
+    }
+    if (!ok) this.log.warn('Usuário cancelou o comando de escrita.');
+    return ok;
+  }
+
+  async goTo(idx: number): Promise<void> {
+    const link = this.link;
+    if (!link || this.busy || this.writing) return;
+    const n = ((idx % NUM_PRESETS) + NUM_PRESETS) % NUM_PRESETS;
+    let cmd: WriteCommand;
+    try {
+      cmd = presetChange(n);
+    } catch (e) {
+      this.log.error(errText(e));
+      return;
+    }
+    if (!this.confirmWrite(cmd)) return;
+    this.writing = true;
+    this.render();
+    try {
+      const echo = link.waitFor((f) => f.cmd === 0xa6 && f.params[0] === n, 1200);
+      const sent = await link.sendWrite(cmd, this.dryRun);
+      if (!sent) return;
+      const before = this.st.activeIdx;
+      this.st.activeIdx = n;
+      if (before !== n) {
+        this.st.live.clear();
+        this.st.editBuffer = null;
+      }
+      this.render();
+      const r = await echo;
+      this.log.add(r ? 'ok' : 'info', r
+        ? `Pedaleira confirmou: preset ativo = ${num(n)}.`
+        : `Sem eco A6 em 1,2 s (pode ser normal). Confira no display se foi para ${num(n)} · ${this.st.presets[n]?.name ?? ''}.`);
+    } catch (e) {
+      this.log.error('Falha ao enviar: ' + errText(e));
+    } finally {
+      this.writing = false;
+      this.render();
+    }
+  }
+
   private count(): number {
     return this.st.presets.filter(Boolean).length;
   }
@@ -270,8 +348,26 @@ export class Reader {
     const sel = st.selected !== null ? st.presets[st.selected] : null;
 
     const prevScroll = this.root.querySelector('.plist')?.scrollTop ?? 0;
+    const ready = connected && c === NUM_PRESETS && st.activeIdx !== null && !this.busy && !this.writing;
+    const vol = (st.editBuffer ?? active)?.volume;
     this.root.innerHTML = `
-      <h2>Leitura <span class="phase-tag">Fase 2</span></h2>
+      ${connected && c === NUM_PRESETS ? `
+      <div class="stage">
+        <div class="stage-now">
+          <span class="stage-num">${st.activeIdx !== null ? num(st.activeIdx) : '—'}</span>
+          <span class="stage-name">${esc(active?.name ?? '—')}</span>
+          <span class="stage-vol">${vol !== undefined ? `volume ${vol}` : ''}</span>
+        </div>
+        <div class="stage-btns">
+          <button class="huge" data-act="prev" ${ready ? '' : 'disabled'} aria-label="Preset anterior">◀</button>
+          <button class="huge" data-act="next" ${ready ? '' : 'disabled'} aria-label="Próximo preset">▶</button>
+        </div>
+        <div class="btns stage-opts">
+          <label class="check"><input type="checkbox" data-act="dry" ${this.dryRun ? 'checked' : ''}> Dry-run (só mostra o pacote no log, não envia)</label>
+          ${this.armed ? '<button data-act="lock" class="danger-outline">Bloquear escrita</button>' : '<span class="hint lockhint">Escrita bloqueada: a 1ª troca pede confirmação.</span>'}
+        </div>
+      </div>` : ''}
+      <h2>Leitura <span class="phase-tag">Fase 2</span> · Troca de preset <span class="phase-tag">Fase 3</span></h2>
       ${connected ? '' : '<p class="hint">Conecte via WebHID acima para habilitar.</p>'}
       <div class="btns">
         <button class="big" data-act="identify" ${!connected || this.busy ? 'disabled' : ''}>Identificar</button>
@@ -286,28 +382,49 @@ export class Reader {
       <dl class="kv2">
         <dt>Aparelho</dt><dd>${st.identity ? esc(`${st.identity.name} · firmware ${st.identity.version}`) : st.fw ? esc(`${st.fw.model} · ${st.fw.version}`) : '—'}</dd>
         <dt>Preset ativo</dt><dd class="big-val">${st.activeIdx !== null ? `${num(st.activeIdx)} · ${esc(active?.name ?? '')}` : '—'}</dd>
-        <dt>Volume (A2)</dt><dd>${st.volume ?? '—'}</dd>
+        <dt>Volume do preset</dt><dd>${vol ?? '—'} <small class="muted">(byte 10, a confirmar)</small></dd>
+        ${st.volume !== null ? `<dt>Volume (A2)</dt><dd>${st.volume}</dd>` : ''}
         <dt>Presets lidos</dt><dd>${c} / ${NUM_PRESETS}</dd>
       </dl>
 
       ${liveBlocks.length ? `<h3>Parâmetros do preset ativo (ao vivo)</h3>${this.blocksHtml(liveBlocks)}`
+        : st.editBuffer ? `<h3>Parâmetros do preset ativo (buffer de edição 0x86)</h3>${this.blocksHtml(st.editBuffer.blocks)}`
         : active ? `<h3>Parâmetros do preset ativo (da memória)</h3>${this.blocksHtml(active.blocks)}` : ''}
 
       ${c ? `<h3>Presets <small>(numeração 001–200 = índice+1; toque para ver)</small></h3>
         <div class="plist">${st.presets
           .map((p, i) => p
-            ? `<button class="pitem ${i === st.activeIdx ? 'active' : ''} ${i === st.selected ? 'sel' : ''}" data-preset="${i}"><span class="pn">${num(i)}</span> ${esc(p.name || '(sem nome)')}</button>`
+            ? `<button class="pitem ${i === st.activeIdx ? 'active' : ''} ${i === st.selected ? 'sel' : ''}" data-preset="${i}"><span class="pn">${num(i)}</span> ${esc(p.name || '(sem nome)')}<span class="pv">${p.volume}</span></button>`
             : '')
           .join('')}</div>` : ''}
 
       ${sel ? `<h3>Preset ${num(st.selected!)} · ${esc(sel.name)} <small>(da memória, só leitura)</small></h3>
+        <div class="btns"><button class="big primary" data-act="goto" ${ready && st.selected !== st.activeIdx ? '' : 'disabled'}>Ir para este preset</button></div>
         ${this.blocksHtml(sel.blocks)}
-        <p class="hint">Delay time (offset 350, não confirmado): ${sel.delayTime} · ordem dos efeitos: ${sel.fxOrder.join(' ')}</p>
+        <p class="hint">Volume (byte 10, a confirmar): ${sel.volume} · byte 11: ${sel.flag11} · delay time: ${sel.delayTime} · ordem dos efeitos: ${sel.fxOrder.join(' ')}</p>
         <details><summary>bytes brutos (512)</summary><pre class="kv">${hex(sel.raw).replace(/((?:\S\S ){16})/g, '$1\n')}</pre></details>` : ''}
     `;
 
     const pl = this.root.querySelector('.plist');
     if (pl) pl.scrollTop = prevScroll;
+    const on = (sel: string, fn: () => void) => {
+      const el = this.root.querySelector<HTMLElement>(sel);
+      if (el) el.onclick = fn;
+    };
+    on('[data-act=prev]', () => void this.goTo((this.st.activeIdx ?? 0) - 1));
+    on('[data-act=next]', () => void this.goTo((this.st.activeIdx ?? 0) + 1));
+    on('[data-act=goto]', () => this.st.selected !== null && void this.goTo(this.st.selected));
+    on('[data-act=lock]', () => {
+      this.armed = false;
+      this.log.info('Escrita bloqueada de novo pelo usuário.');
+      this.render();
+    });
+    const dry = this.root.querySelector<HTMLInputElement>('[data-act=dry]');
+    if (dry) dry.onchange = () => {
+      this.dryRun = dry.checked;
+      this.log.info(`Dry-run ${this.dryRun ? 'LIGADO: nada de escrita será enviado' : 'desligado'}.`);
+      this.render();
+    };
     this.root.querySelector<HTMLButtonElement>('[data-act=identify]')!.onclick = () => void this.identify();
     this.root.querySelector<HTMLButtonElement>('[data-act=read]')!.onclick = () => void this.readAll();
     this.root.querySelector<HTMLButtonElement>('[data-act=dump]')!.onclick = () => this.downloadDump();
