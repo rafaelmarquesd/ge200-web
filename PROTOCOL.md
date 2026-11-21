@@ -171,6 +171,9 @@ Todos os campos são **u16 big-endian**, em sequência:
 2. Host `E0 00×7` (**sem o flush** — não foi necessário) → 200× `A5` em ~16 s, depois
    `90 91 93 94 95 96 97 98 99`, `A1`, `A3`, `A4`, `BB`, `A6`, `84`, `85`, `E3`, `86`, `89`, `82`.
 3. Trocando de preset **no pé**, a pedaleira manda só `A6 idx` — **não** reenvia os blocos nem o `86`.
+5. ✅ Mexendo num bloco **na pedaleira** (ex.: liga/desliga DELAY), ela manda o frame ao vivo daquele bloco (`98 ...`).
+   Quando o host edita (`93 ...`), **não** há eco.
+6. ❓ `BB`: `00 00` na maioria das leituras, `01 00` numa leitura em que o preset ativo era outro. Talvez um flag; sem significado confirmado.
 4. Zero erros de CRC em 229 frames.
 
 ### Sequência de conexão usada pelo Mooer Studio (segundo o MooerManager) ✅

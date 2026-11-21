@@ -412,7 +412,7 @@ export class Editor {
           const ch = this.unsavedChanges();
           return ch.length ? `<p class="warn-box warn">O preset ativo na pedaleira está <b>diferente da memória</b> (alterações não salvas): ${esc(this.describeChanges(ch))}.</p>` : '';
         })()}
-        ${st.editedSinceRead ? '<p class="warn-box warn">Você editou blocos depois da última leitura. Para não desfazer essas edições, salve-as na pedaleira e toque em "Ler presets e parâmetros" antes de mudar o volume.</p>' : ''}
+        ${st.editedSinceRead ? '<p class="warn-box warn">O preset ativo foi editado (pelo app ou na própria pedaleira) depois da última leitura. Para não desfazer essas edições, salve-as na pedaleira e toque em "Ler presets e parâmetros" antes de mudar o volume.</p>' : ''}
         ${!backupNow ? '<p class="warn-box warn">Exporte o backup (passo 1) para liberar.</p>' : ''}
         <div class="btns">
           <button class="big primary" data-ed="vol" ${link && backupNow && !st.editedSinceRead && !busy && this.volTarget !== base.volume ? '' : 'disabled'}>Enviar volume ${this.volTarget ?? ''} (sem salvar)</button>

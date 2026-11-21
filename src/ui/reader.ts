@@ -150,7 +150,14 @@ export class Reader {
         break;
       default: {
         const b = decodeLiveBlock(f.cmd, p);
-        if (b) st.live.set(b.key, b);
+        if (b) {
+          st.live.set(b.key, b);
+          // fora de uma leitura, um bloco ao vivo = alguém mexeu na pedaleira: o 0x86 ficou desatualizado
+          if (!this.busy) {
+            st.editedSinceRead = true;
+            this.log.info(`Mudança feita na pedaleira: ${b.label} ${b.enabled ? 'ON' : 'OFF'} ${b.typeName}.`);
+          }
+        }
         else st.other.set(f.cmd, hex(p));
       }
     }
