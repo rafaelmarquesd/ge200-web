@@ -59,8 +59,15 @@ describe('comandos de escrita da Fase 4', () => {
     mod[3] = 22;
     expect(() => setBlock(0x97, mod, 'x')).toThrow(/travaria/);
     const dly = new Uint8Array(16);
-    dly[3] = 1;
-    expect(() => setBlock(0x98, dly, 'x')).toThrow(/não pode/);
+    dly[3] = 4;
+    expect(() => setBlock(0x98, dly, 'x')).toThrow(/valor atual/);
+    const dly2 = dly.slice();
+    dly2[5] = 30; // level
+    expect(hex(setBlock(0x98, dly2, 'x', dly).frame.subarray(0, 5))).toBe('AA 55 11 00 98');
+    const dly3 = dly.slice();
+    dly3[3] = 5; // tipo
+    expect(() => setBlock(0x98, dly3, 'x', dly)).toThrow(/tipo/);
+    expect(hex(menuSwitch(8).frame.subarray(0, 6))).toBe('AA 55 02 00 82 08');
   });
   it('83 + 512 bytes, volume validado', () => {
     const f = loadPresetToBuffer(preset(80), 'vol').frame;

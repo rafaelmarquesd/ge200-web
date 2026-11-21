@@ -31,7 +31,14 @@ export const LIVE_BLOCK_SIZE: Record<number, number> = {
 };
 
 /** Menu do display que o MooerManager seleciona antes de editar cada bloco (SwitchMenuIfDifferent). */
-export const BLOCK_MENU: Record<number, number> = { 0x90: 1, 0x91: 2, 0x93: 3, 0x94: 4, 0x95: 5, 0x96: 6, 0x97: 7 };
+export const BLOCK_MENU: Record<number, number> = { 0x90: 1, 0x91: 2, 0x93: 3, 0x94: 4, 0x95: 5, 0x96: 6, 0x97: 7, 0x98: 8, 0x99: 9 };
+
+/**
+ * DELAY e REVERB: o MooerManager nunca envia. O formato é o mesmo que a pedaleira manda (u16 BE) e
+ * o menu 8/9 segue a sequência FX=1..MOD=7 — provável, não confirmado. Por segurança o TIPO não pode mudar
+ * (no MOD, tipo inválido trava a pedaleira, e ainda não sabemos quantos tipos estes blocos têm).
+ */
+export const EXPERIMENTAL_BLOCKS = new Set([0x98, 0x99]);
 
 /**
  * 82 menu — troca a tela mostrada no display (FX=1, OD=2, AMP=3, CAB=4, NS=5, EQ=6, MOD=7).
@@ -45,15 +52,19 @@ export function menuSwitch(menu: number): WriteCommand {
 /**
  * 90..97 + struct — altera um bloco do preset ativo em tempo real (buffer de edição, não salva).
  * Confirmado: MooerManager SetFX/SetDS/SetAmplifier/SetCabinet/SetNoiseGate/SetEQ/SetModulator.
- * DELAY (98) e REVERB (99) NÃO são aceitos: o MooerManager nunca os envia.
+ * DELAY (98) e REVERB (99): experimentais, sem troca de tipo (veja EXPERIMENTAL_BLOCKS).
  */
-export function setBlock(cmd: number, raw: Uint8Array, label: string): WriteCommand {
+export function setBlock(cmd: number, raw: Uint8Array, label: string, prev?: Uint8Array): WriteCommand {
   if (!(cmd in BLOCK_MENU)) throw new RangeError(`bloco 0x${cmd.toString(16)} não pode ser editado`);
   if (raw.length !== LIVE_BLOCK_SIZE[cmd]) throw new RangeError(`bloco 0x${cmd.toString(16)}: ${raw.length} bytes, esperado ${LIVE_BLOCK_SIZE[cmd]}`);
   const type = (raw[2] << 8) | raw[3];
   if (type < 1) throw new RangeError('tipo inválido (0)');
   // "The GE-200 crashes if s.type is invalid" (MooerManager): MOD só aceita 1..20 aqui.
   if (cmd === 0x97 && type > 20) throw new RangeError(`tipo de MOD ${type} travaria a pedaleira (máx. 20)`);
+  if (EXPERIMENTAL_BLOCKS.has(cmd)) {
+    if (!prev || prev.length !== raw.length) throw new RangeError('DELAY/REVERB: preciso do valor atual do bloco');
+    if (prev[2] !== raw[2] || prev[3] !== raw[3]) throw new RangeError('DELAY/REVERB: troca de tipo ainda não é permitida');
+  }
   return { label, risk: 'volatil', frame: encodeFrame(cmd, raw) };
 }
 

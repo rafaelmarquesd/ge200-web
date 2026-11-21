@@ -218,6 +218,9 @@ aparece. Escrita (Fase 4, experimental): o app manda `83` + os 512 bytes do pres
 com só o byte 10 alterado, o que carrega no buffer de edição sem salvar. O usuário salva no botão da pedaleira,
 e o app relê e compara com o backup. **O `A8` continua sem ser enviado.**
 
+✅ Teste completo no aparelho (0.4.1): `83` com volume 100 → usuário salvou na pedaleira (`A9`/`A8 1C` recebidos)
+→ releitura e comparação com o backup: única diferença "VOLUME 95→100". Trocar de preset no pé descarta o buffer.
+
 ✅ Teste no aparelho (0.4.0): depois do `83` com volume 95, a releitura trouxe `86` (buffer) com volume 95 e `A5`
 (memória) com 100 — o comando foi aceito e não grava sozinho. Depois, descobrir
 como escrever: (a) mandar o preset inteiro com `83` + salvar com `A8`, ou (b) algum comando direto. Nada disso será
@@ -242,7 +245,9 @@ quando a troca vem do host; só manda `A6` quando a troca é feita no pé.
 
 - Só leitura sem confirmação: `84`, `E0`.
 - Escrita volátil, com confirmação na 1ª vez de cada tipo: `A6` (troca de preset), `82` + `90..97` (edição de blocos, igual ao MooerManager).
-- `98`/`99` (DELAY/REVERB): **não enviados**, o MooerManager nunca os envia. Mostrados só para leitura.
+- `98`/`99` (DELAY/REVERB): **experimentais** (pedido do usuário). Mesmo formato u16 BE que a pedaleira manda,
+  menu `82 08`/`82 09` por analogia (FX=1..MOD=7). Confirmação própria. **O tipo não pode mudar** até sabermos
+  quantos tipos existem (tipo inválido trava a pedaleira no MOD).
 - `83` (preset inteiro no buffer): só para o Preset Volume, exige backup da sessão e confirmação a cada envio.
 - `A8` (salvar): **não enviado** (o 2º byte fixo `A5` pode ser o slot 166). Salvar = botão da própria pedaleira.
 - **Nunca implementados**: `E1`, `E2`, `A1`, `A3`, control transfers de áudio, qualquer coisa de firmware, e o "flush".

@@ -10,7 +10,7 @@
  */
 
 import { BLOCKS, decodeLiveBlock, decodeSavedPreset, type BlockDef, type BlockState } from '../protocol/blocks';
-import { BLOCK_MENU, loadPresetToBuffer, menuSwitch, setBlock, type WriteCommand } from '../protocol/commands';
+import { BLOCK_MENU, EXPERIMENTAL_BLOCKS, loadPresetToBuffer, menuSwitch, setBlock, type WriteCommand } from '../protocol/commands';
 import { diffPresets, hexToBytes, makeBackup, offsetName, parseBackup, toMo, type Backup, type PresetDiff } from '../protocol/backup';
 import { AMP_MODEL_NAMES, CAB_MODEL_NAMES } from '../protocol/constants';
 import { ascii, hex } from '../protocol/frame';
@@ -36,6 +36,9 @@ const EDITABLE: Record<string, Record<string, FieldUi>> = {
   ns: { attack: { max: 100 }, release: { max: 100 }, thresh: { max: 99 } },
   eq: { band1: { max: 24 }, band2: { max: 24 }, band3: { max: 24 }, band4: { max: 24 } },
   mod: { rate: { max: 99 }, level: { max: 99 }, depth: { max: 99 } },
+  // experimentais (máximos a confirmar no display da pedaleira)
+  dly: { level: { max: 100 }, feedback: { max: 100 }, time: { max: 2000 } },
+  rvb: { preDelay: { max: 100 }, level: { max: 100 }, decay: { max: 100 }, tone: { max: 100 } },
 };
 
 function userNames(hexStr: string | undefined): string[] {
@@ -55,6 +58,7 @@ function save(name: string, bytes: Uint8Array): void {
 
 export class Editor {
   private armedEdit = false;
+  private armedExperimental = false;
   private interacting = false;
   private queue: Promise<void> = Promise.resolve();
   private lastBackup: Backup | null = null;
@@ -158,8 +162,27 @@ export class Editor {
     return link.sendWrite(cmd, this.reader.isDryRun);
   }
 
-  private confirmEdit(cmd: WriteCommand): boolean {
-    if (this.reader.isDryRun || this.armedEdit) return true;
+  private confirmEdit(cmd: WriteCommand, experimental: boolean): boolean {
+    if (this.reader.isDryRun) return true;
+    if (experimental && !this.armedExperimental) {
+      const ok = window.confirm(
+        '⚠️ EXPERIMENTAL — DELAY/REVERB\n\n' +
+          `${cmd.label}\n${hex(cmd.frame)}\n\n` +
+          'O MooerManager nunca enviou este comando. O formato é o mesmo que a própria pedaleira manda, mas não foi testado. ' +
+          'O tipo do efeito não muda; só o parâmetro. Nada é salvo na memória.\n\n' +
+          'Se a pedaleira reagir de forma estranha (travar, som errado), desligue e ligue de novo: sem salvar, nada se perde.\n\n' +
+          'Se confirmar, as próximas edições de DELAY/REVERB nesta sessão vão direto.\n\nEnviar?',
+      );
+      if (!ok) {
+        this.log.warn('Usuário cancelou a edição experimental.');
+        return false;
+      }
+      this.armedExperimental = true;
+      this.armedEdit = true;
+      this.log.ok('Usuário liberou edições experimentais de DELAY/REVERB nesta sessão.');
+      return true;
+    }
+    if (this.armedEdit) return true;
     const ok = window.confirm(
       'O app vai enviar uma EDIÇÃO DE PARÂMETRO para a pedaleira:\n\n' +
         `${cmd.label}\n${hex(cmd.frame)}\n\n` +
@@ -184,13 +207,13 @@ export class Editor {
     mutate(raw);
     let cmd: WriteCommand;
     try {
-      cmd = setBlock(def.cmd, raw, `${def.label}: ${what}`);
+      cmd = setBlock(def.cmd, raw, `${def.label}: ${what}`, cur.raw);
     } catch (e) {
       this.log.error('Edição recusada: ' + errText(e));
       this.render();
       return;
     }
-    if (!this.confirmEdit(cmd)) {
+    if (!this.confirmEdit(cmd, EXPERIMENTAL_BLOCKS.has(def.cmd))) {
       this.render();
       return;
     }
@@ -313,7 +336,8 @@ export class Editor {
   private blockEditor(def: BlockDef, b: BlockState): string {
     const fields = EDITABLE[def.key];
     const editable = !!fields && def.cmd in BLOCK_MENU;
-    const opts = editable ? this.typeOptions(def) : [];
+    const experimental = EXPERIMENTAL_BLOCKS.has(def.cmd);
+    const opts = editable && !experimental ? this.typeOptions(def) : [];
     const typeOk = opts.some((o) => o.value === b.type);
     const rows = b.values.map((v, i) => {
       const f = fields?.[v.name];
@@ -322,14 +346,16 @@ export class Editor {
         return `<div class="frow"><span>${esc(v.name)}</span><select data-b="${def.key}" data-f="${i}">${f.options
           .map((o, j) => `<option value="${j}" ${j === v.value ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></div>`;
       }
-      const val = Math.min(v.value, f.max);
-      return `<div class="frow"><span>${esc(v.name)}</span><input type="range" min="0" max="${f.max}" value="${val}" data-b="${def.key}" data-f="${i}"><span class="fval" id="fv-${def.key}-${i}">${v.value}</span></div>`;
+      const max = Math.max(f.max, v.value);
+      return `<div class="frow"><span>${esc(v.name)}</span><input type="range" min="0" max="${max}" value="${v.value}" data-b="${def.key}" data-f="${i}"><span class="fval" id="fv-${def.key}-${i}">${v.value}</span></div>`;
     }).join('');
     return `<div class="eblock ${b.enabled ? 'on' : 'off'}">
-      <div class="bhead"><span class="bname">${esc(def.label)}</span>
+      <div class="bhead"><span class="bname">${esc(def.label)}${experimental ? ' <span class="exp">experimental</span>' : ''}</span>
         ${editable ? `<button class="toggle ${b.enabled ? 'on' : ''}" data-toggle="${def.key}">${b.enabled ? 'ON' : 'OFF'}</button>` : `<span class="badge">${b.enabled ? 'ON' : 'OFF'}</span>`}
       </div>
-      ${editable
+      ${editable && experimental
+        ? `<div class="btype">${esc(b.typeName)}</div><p class="hint small">Tipo fixo por enquanto (não sei quantos tipos existem). Parâmetros e ON/OFF podem mudar.</p>`
+        : editable
         ? `<select class="tsel" data-type="${def.key}" ${typeOk ? '' : 'disabled'}>${typeOk ? '' : `<option>${esc(b.typeName)}</option>`}${opts
             .map((o) => `<option value="${o.value}" ${o.value === b.type ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select>`
         : `<div class="btype">${esc(b.typeName)}</div><p class="hint small">Só leitura: o MooerManager nunca envia este bloco, então não sei se é seguro.</p>`}
