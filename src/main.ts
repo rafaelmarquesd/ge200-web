@@ -8,6 +8,7 @@ import { PRODUCT_ID, VENDOR_ID } from './protocol/constants';
 import { Ge200Link } from './usb/hid-link';
 import { Reader } from './ui/reader';
 import { Editor } from './ui/editor';
+import { Leveler } from './ui/leveler';
 
 declare const __APP_VERSION__: string;
 declare const __BUILD_TIME__: string;
@@ -46,7 +47,8 @@ const hid = new WebHidDiag(log, env);
 let active: 'usb' | 'hid' | null = null;
 let link: Ge200Link | null = null;
 const reader = new Reader($('reader'), log, __APP_VERSION__);
-new Editor($('editor'), reader, log, __APP_VERSION__);
+const editor = new Editor($('editor'), reader, log, __APP_VERSION__);
+new Leveler($('leveler'), reader, editor, log);
 
 function dropLink(): void {
   link?.close();

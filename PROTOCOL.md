@@ -244,7 +244,15 @@ Hipóteses (a confirmar na Fase 2, só com leitura):
 `A6 idx` enviado pelo app troca o preset (testado no aparelho). A pedaleira **não responde** com eco `A6`
 quando a troca vem do host; só manda `A6` quando a troca é feita no pé.
 
-## 9. Regras deste projeto para comandos
+## 9. Áudio USB e nivelador (Fase 5)
+- A GE200 é interface de áudio USB (interfaces 0–2: 2 canais, 24 bits, 44,1 kHz). No navegador ela aparece
+  (ou não) como entrada do `getUserMedia`; o app lista as entradas no log.
+- ❓ Ainda não sabemos se a gravação USB é feita antes ou depois do Preset Volume. O nivelador descobre:
+  ao remedir um preset depois de mudar o volume, ele estima k (dB medido ÷ dB previsto). k ≈ 0 = a gravação
+  USB não inclui o Preset Volume → medir pelo microfone.
+- Modelo usado para o volume (hipótese até haver medições): ganho dB = k · 20·log10(V/100).
+
+## 10. Regras deste projeto para comandos
 
 - Só leitura sem confirmação: `84`, `E0`.
 - Escrita volátil, com confirmação na 1ª vez de cada tipo: `A6` (troca de preset), `82` + `90..97` (edição de blocos, igual ao MooerManager).

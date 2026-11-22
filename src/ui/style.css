@@ -181,3 +181,32 @@ select { font: inherit; color: var(--text); background: #0f1318; border: 1px sol
 .fval { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
 .unsaved { color: var(--warn); }
 .exp { font-size: .65rem; font-weight: 800; color: #1a1203; background: var(--warn); border-radius: 6px; padding: 1px 5px; vertical-align: middle; }
+
+/* Fase 5: nivelador */
+.meter { margin: 10px 0; }
+.mrow { display: grid; grid-template-columns: 92px 1fr 92px; gap: 8px; align-items: center; font-size: .88rem; min-height: 28px; }
+.mrow b { text-align: right; font-variant-numeric: tabular-nums; }
+.mrow b.clip { color: var(--err); }
+.mbar { height: 12px; background: #0a0c0f; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.mbar > div { height: 100%; background: var(--ok); transition: width .12s; }
+.mbar.peak > div { background: var(--accent); }
+.lvlist { display: grid; gap: 8px; margin: 8px 0; }
+.lvrow { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: #12161b; }
+.lvrow.now { border-color: var(--accent); }
+.lvname { font-weight: 600; margin-bottom: 4px; overflow-wrap: anywhere; }
+.lvdata { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .88rem; color: var(--muted); align-items: center; }
+.lvdata b { color: var(--text); font-variant-numeric: tabular-nums; }
+.lvdata b.chg { color: var(--accent); }
+.check.mini { min-height: 32px; flex: 0 0 auto; }
+.lvbtns { display: flex; gap: 8px; margin-top: 8px; }
+.lvbtns button { flex: 1; }
+.lvbtns button[data-remove] { flex: 0 0 52px; }
+.lvbig { text-align: center; border-radius: 14px; padding: 18px 12px; margin: 10px 0; font-size: 1.6rem; font-weight: 800; background: #1d1709; border: 2px solid #5a4210; }
+.lvbig span { font-size: 2.6rem; color: var(--accent); margin-left: 8px; font-variant-numeric: tabular-nums; }
+.lvbig.tocar { background: #0f2a17; border-color: var(--ok); }
+.lvbig .small { font-size: .95rem; font-weight: 500; color: var(--muted); margin: 6px 0 10px; }
+.lvopts { display: grid; gap: 4px; }
+.lvopts .check { flex-wrap: wrap; }
+.numin { width: 76px; font: inherit; color: var(--text); background: #0f1318; border: 1px solid #333c48; border-radius: 10px; min-height: 40px; padding: 4px 8px; }
+.check input.numin { width: 76px; height: auto; accent-color: auto; }
+.check select { min-height: 40px; }

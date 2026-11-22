@@ -89,6 +89,11 @@ export class Editor {
     return this.st.presets.every(Boolean);
   }
 
+  /** Backup feito nesta sessão (exigido antes de mudar volumes, aqui e no nivelador). */
+  hasBackup(): boolean {
+    return this.hasBackupNow();
+  }
+
   private hasBackupNow(): boolean {
     return this.backupGen >= 1;
   }
